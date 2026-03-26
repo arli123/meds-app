@@ -10,6 +10,26 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [resetSent, setResetSent] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      setError('הכנס את האימייל שלך קודם');
+      return;
+    }
+    setResetLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + '/change-password',
+    });
+    setResetLoading(false);
+    if (error) {
+      setError('שגיאה בשליחת המייל. נסה שוב.');
+    } else {
+      setResetSent(true);
+      setError('');
+    }
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -123,6 +143,21 @@ export default function Login() {
             {loading ? 'מתחבר...' : 'להתחברות'}
           </button>
         </form>
+
+        {resetSent ? (
+          <div style={{ marginTop: 16, padding: 12, background: '#d1fae5', borderRadius: 10, textAlign: 'center', color: '#065f46', fontSize: 14 }}>
+            נשלח מייל לאיפוס סיסמה. בדוק את תיבת הדואר שלך.
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={handleForgotPassword}
+            disabled={resetLoading}
+            style={{ background: 'none', border: 'none', color: colors.primary, fontSize: 14, cursor: 'pointer', marginTop: 12, width: '100%', textAlign: 'center' }}
+          >
+            {resetLoading ? 'שולח...' : 'שכחתי סיסמה'}
+          </button>
+        )}
 
         <div style={{
           marginTop: 24,
