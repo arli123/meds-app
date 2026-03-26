@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { colors, base } from '../styles';
 
@@ -7,11 +7,11 @@ const DEFAULT_TIME_SLOTS = ['07:00', '12:00', '20:00'];
 export default function Schedule({ profile }) {
   const [medications, setMedications] = useState([]);
   const [timeSlots, setTimeSlots] = useState([]);
-  const [schedules, setSchedules] = useState([]); // [{id, medication_id, scheduled_time}]
+  const [schedules, setSchedules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [dragOverSlot, setDragOverSlot] = useState(null);
+  const [selectedMed, setSelectedMed] = useState(null); // {id, name, color}
   const [newTime, setNewTime] = useState('');
   const [addingTime, setAddingTime] = useState(false);
 
@@ -22,7 +22,6 @@ export default function Schedule({ profile }) {
   const loadData = async () => {
     setLoading(true);
 
-    // Load medications
     const { data: medsData, error: medsError } = await supabase
       .from('medications')
       .select('*')
@@ -35,7 +34,6 @@ export default function Schedule({ profile }) {
       return;
     }
 
-    // Load schedules
     const { data: schedData, error: schedError } = await supabase
       .from('schedules')
       .select('*, medications(name, color)')
@@ -52,40 +50,26 @@ export default function Schedule({ profile }) {
     setMedications(medsData || []);
     setSchedules(schedData || []);
 
-    // Build unique time slots from existing schedules + defaults
     const existingTimes = [...new Set((schedData || []).map((s) => s.scheduled_time.substring(0, 5)))];
     const allTimes = [...new Set([...DEFAULT_TIME_SLOTS, ...existingTimes])].sort();
     setTimeSlots(allTimes);
-
     setLoading(false);
   };
 
-  const handleDragStart = (e, medication) => {
-    e.dataTransfer.setData('medicationId', medication.id);
-    e.dataTransfer.setData('medicationName', medication.name);
-    e.dataTransfer.effectAllowed = 'copy';
+  const handleSelectMed = (med) => {
+    setSelectedMed(prev => prev?.id === med.id ? null : med);
+    setError('');
   };
 
-  const handleDragOver = (e, timeSlot) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
-    setDragOverSlot(timeSlot);
-  };
+  const handleAssignToSlot = async (timeSlot) => {
+    if (!selectedMed) {
+      setError('בחר תרופה קודם');
+      setTimeout(() => setError(''), 2500);
+      return;
+    }
 
-  const handleDragLeave = () => {
-    setDragOverSlot(null);
-  };
-
-  const handleDrop = async (e, timeSlot) => {
-    e.preventDefault();
-    setDragOverSlot(null);
-
-    const medicationId = e.dataTransfer.getData('medicationId');
-    if (!medicationId) return;
-
-    // Check if already scheduled at this time
     const existing = schedules.find(
-      (s) => s.medication_id === medicationId && s.scheduled_time.startsWith(timeSlot)
+      (s) => s.medication_id === selectedMed.id && s.scheduled_time.startsWith(timeSlot)
     );
     if (existing) {
       setError('תרופה זו כבר מתוזמנת לשעה זו');
@@ -93,12 +77,11 @@ export default function Schedule({ profile }) {
       return;
     }
 
-    setError('');
     const { data, error } = await supabase
       .from('schedules')
       .insert({
         user_id: profile.id,
-        medication_id: medicationId,
+        medication_id: selectedMed.id,
         scheduled_time: timeSlot + ':00',
         is_active: true,
       })
@@ -106,11 +89,12 @@ export default function Schedule({ profile }) {
       .single();
 
     if (error) {
-      setError('שגיאה בהוספת תזמון: ' + error.message);
+      setError('שגיאה: ' + error.message);
     } else {
       setSchedules((prev) => [...prev, data]);
-      setSuccess('תרופה נוספה ללוח הזמנים');
+      setSuccess(`${selectedMed.name} נוסף ל-${timeSlot}`);
       setTimeout(() => setSuccess(''), 2500);
+      setSelectedMed(null);
     }
   };
 
@@ -127,17 +111,15 @@ export default function Schedule({ profile }) {
     }
   };
 
-  const handleAddTimeSlot = async (e) => {
+  const handleAddTimeSlot = (e) => {
     e.preventDefault();
     if (!newTime) return;
-
     const normalized = newTime.substring(0, 5);
     if (timeSlots.includes(normalized)) {
-      setError('שעה זו כבר קיימת בלוח');
+      setError('שעה זו כבר קיימת');
       setTimeout(() => setError(''), 3000);
       return;
     }
-
     setTimeSlots((prev) => [...prev, normalized].sort());
     setNewTime('');
     setAddingTime(false);
@@ -146,7 +128,7 @@ export default function Schedule({ profile }) {
   const handleRemoveTimeSlot = (time) => {
     const hasSchedules = schedules.some((s) => s.scheduled_time.startsWith(time));
     if (hasSchedules) {
-      setError('לא ניתן למחוק שעה עם תרופות מתוזמנות. מחק קודם את התרופות.');
+      setError('מחק קודם את התרופות בשעה זו');
       setTimeout(() => setError(''), 4000);
       return;
     }
@@ -169,194 +151,141 @@ export default function Schedule({ profile }) {
       <h2 style={{ fontSize: 20, fontWeight: 700, color: colors.text, marginBottom: 4 }}>
         לוח זמנים
       </h2>
-      <p style={{ color: colors.textLight, fontSize: 13, marginBottom: 16 }}>
-        גרור תרופה לשעה הרצויה
-      </p>
 
       {error && <div style={base.errorBox}>{error}</div>}
       {success && <div style={base.successBox}>{success}</div>}
 
-      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-        {/* Medications panel (right - draggable) */}
-        <div style={{ width: 130, flexShrink: 0 }}>
-          <div style={{
-            ...base.card,
-            padding: '12px 10px',
-            position: 'sticky',
-            top: 70,
-          }}>
-            <h3 style={{ fontSize: 13, fontWeight: 700, color: colors.textLight, marginBottom: 10, textAlign: 'center' }}>
-              תרופות
-            </h3>
-            {medications.length === 0 ? (
-              <p style={{ fontSize: 12, color: colors.textLight, textAlign: 'center' }}>
-                אין תרופות
-              </p>
-            ) : (
-              medications.map((med) => (
-                <div
+      {/* Medications - tap to select */}
+      <div style={{ ...base.card, padding: '12px', marginBottom: 16 }}>
+        <p style={{ fontSize: 13, color: colors.textLight, marginBottom: 10, fontWeight: 600 }}>
+          {selectedMed ? `✓ נבחר: ${selectedMed.name} — לחץ על שעה להוספה` : 'לחץ על תרופה לבחירה'}
+        </p>
+        {medications.length === 0 ? (
+          <p style={{ fontSize: 13, color: colors.textLight }}>אין תרופות. הוסף תרופות קודם.</p>
+        ) : (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {medications.map((med) => {
+              const isSelected = selectedMed?.id === med.id;
+              return (
+                <button
                   key={med.id}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, med)}
+                  onClick={() => handleSelectMed(med)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     gap: 6,
-                    padding: '8px 8px',
-                    background: colors.bg,
-                    borderRadius: 8,
-                    marginBottom: 6,
-                    cursor: 'grab',
-                    border: `1px solid ${colors.border}`,
-                    userSelect: 'none',
-                    transition: 'box-shadow 0.15s',
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)'}
-                  onMouseLeave={(e) => e.currentTarget.style.boxShadow = 'none'}
-                >
-                  <div style={{
-                    width: 10, height: 10, borderRadius: '50%',
-                    background: med.color, flexShrink: 0,
-                  }} />
-                  <span style={{ fontSize: 12, fontWeight: 600, color: colors.text, wordBreak: 'break-word' }}>
-                    {med.name}
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Time slots panel (left) */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {timeSlots.map((time) => {
-            const slotSchedules = getSchedulesForTime(time);
-            const isDragOver = dragOverSlot === time;
-
-            return (
-              <div key={time} style={{ marginBottom: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                  <div style={{
-                    background: colors.primary,
-                    color: colors.white,
-                    borderRadius: 8,
-                    padding: '3px 10px',
-                    fontWeight: 700,
-                    fontSize: 15,
-                  }}>
-                    {time}
-                  </div>
-                  <button
-                    onClick={() => handleRemoveTimeSlot(time)}
-                    style={{
-                      background: 'none', border: 'none', cursor: 'pointer',
-                      color: colors.textLight, fontSize: 16, padding: '2px 4px',
-                      lineHeight: 1,
-                    }}
-                    title="הסר שעה"
-                  >
-                    ×
-                  </button>
-                </div>
-
-                {/* Drop zone */}
-                <div
-                  onDragOver={(e) => handleDragOver(e, time)}
-                  onDragLeave={handleDragLeave}
-                  onDrop={(e) => handleDrop(e, time)}
-                  style={{
-                    minHeight: 60,
-                    borderRadius: 10,
-                    border: `2px dashed ${isDragOver ? colors.primary : colors.border}`,
-                    background: isDragOver ? colors.primaryLight : colors.bg,
-                    padding: 8,
+                    padding: '8px 14px',
+                    borderRadius: 20,
+                    border: `2px solid ${isSelected ? colors.primary : colors.border}`,
+                    background: isSelected ? colors.primaryLight : colors.white,
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                    fontSize: 14,
+                    color: colors.text,
                     transition: 'all 0.15s',
                   }}
                 >
-                  {slotSchedules.length === 0 && (
-                    <div style={{
-                      textAlign: 'center',
-                      color: isDragOver ? colors.primary : colors.textLight,
-                      fontSize: 12,
-                      paddingTop: 14,
-                      fontWeight: isDragOver ? 600 : 400,
-                    }}>
-                      {isDragOver ? 'שחרר כאן ✓' : 'גרור תרופה לכאן'}
-                    </div>
-                  )}
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {slotSchedules.map((s) => (
-                      <div
-                        key={s.id}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 5,
-                          background: colors.white,
-                          border: `1px solid ${colors.border}`,
-                          borderRadius: 20,
-                          padding: '4px 10px 4px 6px',
-                          fontSize: 13,
-                          fontWeight: 600,
-                        }}
-                      >
-                        <div style={{
-                          width: 10, height: 10, borderRadius: '50%',
-                          background: s.medications?.color || colors.primary,
-                        }} />
-                        <span style={{ color: colors.text }}>{s.medications?.name}</span>
-                        <button
-                          onClick={() => handleRemoveSchedule(s.id)}
-                          style={{
-                            background: 'none', border: 'none', cursor: 'pointer',
-                            color: colors.textLight, fontSize: 15, padding: '0 0 0 2px',
-                            lineHeight: 1, marginRight: 2,
-                          }}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: med.color }} />
+                  {med.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
-          {/* Add time slot */}
-          {addingTime ? (
-            <form onSubmit={handleAddTimeSlot} style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <input
-                type="time"
-                value={newTime}
-                onChange={(e) => setNewTime(e.target.value)}
-                required
-                style={{ ...base.input, flex: 1 }}
-                autoFocus
-              />
-              <button type="submit" style={{ ...base.btn, ...base.btnPrimary, padding: '10px 14px', whiteSpace: 'nowrap' }}>
-                הוסף
+      {/* Time slots */}
+      {timeSlots.map((time) => {
+        const slotSchedules = getSchedulesForTime(time);
+        return (
+          <div key={time} style={{ marginBottom: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <div style={{
+                background: colors.primary, color: colors.white,
+                borderRadius: 8, padding: '3px 10px',
+                fontWeight: 700, fontSize: 15,
+              }}>
+                {time}
+              </div>
+              <button
+                onClick={() => handleRemoveTimeSlot(time)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: colors.textLight, fontSize: 16, padding: '2px 4px' }}
+              >
+                ×
               </button>
-              <button type="button" onClick={() => setAddingTime(false)} style={{ ...base.btn, ...base.btnGhost, padding: '10px 14px' }}>
-                ביטול
-              </button>
-            </form>
-          ) : (
-            <button
-              onClick={() => setAddingTime(true)}
+            </div>
+
+            <div
+              onClick={() => handleAssignToSlot(time)}
               style={{
-                ...base.btn,
-                ...base.btnGhost,
-                width: '100%',
-                marginTop: 8,
-                fontSize: 14,
+                minHeight: 60,
+                borderRadius: 10,
+                border: `2px dashed ${selectedMed ? colors.primary : colors.border}`,
+                background: selectedMed ? colors.primaryLight : colors.bg,
+                padding: 8,
+                cursor: selectedMed ? 'pointer' : 'default',
+                transition: 'all 0.15s',
               }}
             >
-              + הוסף שעה
-            </button>
-          )}
-        </div>
-      </div>
+              {slotSchedules.length === 0 && (
+                <div style={{
+                  textAlign: 'center', fontSize: 12, paddingTop: 14,
+                  color: selectedMed ? colors.primary : colors.textLight,
+                  fontWeight: selectedMed ? 600 : 400,
+                }}>
+                  {selectedMed ? 'לחץ להוספה כאן ✓' : 'ריק'}
+                </div>
+              )}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {slotSchedules.map((s) => (
+                  <div
+                    key={s.id}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 5,
+                      background: colors.white, border: `1px solid ${colors.border}`,
+                      borderRadius: 20, padding: '4px 10px 4px 6px',
+                      fontSize: 13, fontWeight: 600,
+                    }}
+                  >
+                    <div style={{ width: 10, height: 10, borderRadius: '50%', background: s.medications?.color || colors.primary }} />
+                    <span style={{ color: colors.text }}>{s.medications?.name}</span>
+                    <button
+                      onClick={() => handleRemoveSchedule(s.id)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: colors.textLight, fontSize: 15, padding: '0 0 0 2px', lineHeight: 1 }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Add time slot */}
+      {addingTime ? (
+        <form onSubmit={handleAddTimeSlot} style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+          <input
+            type="time"
+            value={newTime}
+            onChange={(e) => setNewTime(e.target.value)}
+            required
+            style={{ ...base.input, flex: 1 }}
+            autoFocus
+          />
+          <button type="submit" style={{ ...base.btn, ...base.btnPrimary, padding: '10px 14px' }}>הוסף</button>
+          <button type="button" onClick={() => setAddingTime(false)} style={{ ...base.btn, ...base.btnGhost, padding: '10px 14px' }}>ביטול</button>
+        </form>
+      ) : (
+        <button
+          onClick={() => setAddingTime(true)}
+          style={{ ...base.btn, ...base.btnGhost, width: '100%', marginTop: 8, fontSize: 14 }}
+        >
+          + הוסף שעה
+        </button>
+      )}
     </div>
   );
 }
