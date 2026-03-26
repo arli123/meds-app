@@ -321,7 +321,7 @@ export default function Schedule({ profile }) {
             <div style={{ width: 40, height: 4, background: colors.border, borderRadius: 2, margin: '0 auto 20px' }} />
             <h3 style={{ fontSize: 17, fontWeight: 700, color: colors.text, marginBottom: 20, textAlign: 'center' }}>הוסף שעה</h3>
 
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginBottom: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginBottom: 24, direction: 'ltr' }}>
               <select
                 value={newHour}
                 onChange={e => setNewHour(e.target.value)}
