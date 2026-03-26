@@ -14,6 +14,8 @@ export default function Schedule({ profile }) {
   const [dragOverSlot, setDragOverSlot] = useState(null);
   const [newTime, setNewTime] = useState('');
   const [addingTime, setAddingTime] = useState(false);
+  const [editingTime, setEditingTime] = useState(null); // the time slot being edited
+  const [editTimeValue, setEditTimeValue] = useState('');
 
   // Touch drag state
   const touchDragMed = useRef(null);
@@ -130,6 +132,29 @@ export default function Schedule({ profile }) {
     setNewTime(''); setAddingTime(false);
   };
 
+  const handleEditTimeStart = (time) => {
+    setEditingTime(time);
+    setEditTimeValue(time);
+  };
+
+  const handleEditTimeSubmit = (e) => {
+    e.preventDefault();
+    const norm = editTimeValue.substring(0, 5);
+    if (!norm) return;
+    if (norm !== editingTime && timeSlots.includes(norm)) {
+      setError('שעה זו כבר קיימת');
+      setTimeout(() => setError(''), 3000);
+      return;
+    }
+    setTimeSlots(prev => prev.map(t => t === editingTime ? norm : t).sort());
+    setSchedules(prev => prev.map(s =>
+      s.scheduled_time.startsWith(editingTime)
+        ? { ...s, scheduled_time: norm + ':00' }
+        : s
+    ));
+    setEditingTime(null);
+  };
+
   const handleRemoveTimeSlot = (time) => {
     if (schedules.some(s => s.scheduled_time.startsWith(time))) {
       setError('מחק קודם את התרופות בשעה זו');
@@ -190,8 +215,30 @@ export default function Schedule({ profile }) {
             return (
               <div key={time} style={{ marginBottom: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                  <div style={{ background: colors.primary, color: colors.white, borderRadius: 8, padding: '3px 10px', fontWeight: 700, fontSize: 15 }}>{time}</div>
-                  <button onClick={() => handleRemoveTimeSlot(time)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: colors.textLight, fontSize: 16, padding: '2px 4px' }}>×</button>
+                  {editingTime === time ? (
+                    <form onSubmit={handleEditTimeSubmit} style={{ display: 'flex', gap: 6 }}>
+                      <input
+                        type="time"
+                        value={editTimeValue}
+                        onChange={e => setEditTimeValue(e.target.value)}
+                        autoFocus
+                        style={{ ...base.input, padding: '3px 8px', fontSize: 15, width: 110 }}
+                      />
+                      <button type="submit" style={{ ...base.btn, ...base.btnPrimary, padding: '3px 10px', fontSize: 13 }}>✓</button>
+                      <button type="button" onClick={() => setEditingTime(null)} style={{ ...base.btn, ...base.btnGhost, padding: '3px 10px', fontSize: 13 }}>✕</button>
+                    </form>
+                  ) : (
+                    <div
+                      onClick={() => handleEditTimeStart(time)}
+                      style={{ background: colors.primary, color: colors.white, borderRadius: 8, padding: '3px 10px', fontWeight: 700, fontSize: 15, cursor: 'pointer' }}
+                      title="לחץ לעריכה"
+                    >
+                      {time}
+                    </div>
+                  )}
+                  {editingTime !== time && (
+                    <button onClick={() => handleRemoveTimeSlot(time)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: colors.textLight, fontSize: 16, padding: '2px 4px' }}>×</button>
+                  )}
                 </div>
                 <div
                   data-timeslot={time}
