@@ -138,3 +138,27 @@ self.addEventListener('notificationclick', (event) => {
 self.addEventListener('notificationclose', () => {
   // User dismissed the notification — do nothing, reminder will fire again next hour
 });
+
+// Handle Web Push from server (caregiver alerts)
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+  try {
+    const data = event.data.json();
+    event.waitUntil(
+      self.registration.showNotification(data.title || 'תזכורת תרופות', {
+        body: data.body || '',
+        icon: data.icon || '/icon-192.png',
+        badge: data.badge || '/icon-192.png',
+        requireInteraction: true,
+        vibrate: [300, 100, 300, 100, 300],
+      })
+    );
+  } catch {
+    event.waitUntil(
+      self.registration.showNotification('תזכורת תרופות', {
+        body: event.data.text(),
+        icon: '/icon-192.png',
+      })
+    );
+  }
+});

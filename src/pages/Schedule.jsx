@@ -4,6 +4,17 @@ import { colors, base } from '../styles';
 
 const DEFAULT_TIME_SLOTS = ['07:00', '12:00', '20:00'];
 
+function getStoredSlots(userId) {
+  try {
+    const raw = localStorage.getItem(`custom_timeslots_${userId}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function saveStoredSlots(userId, slots) {
+  localStorage.setItem(`custom_timeslots_${userId}`, JSON.stringify(slots));
+}
+
 export default function Schedule({ profile }) {
   const [medications, setMedications] = useState([]);
   const [timeSlots, setTimeSlots] = useState([]);
@@ -14,12 +25,14 @@ export default function Schedule({ profile }) {
   const [dragOverSlot, setDragOverSlot] = useState(null);
   const [newTime, setNewTime] = useState('');
   const [addingTime, setAddingTime] = useState(false);
-  const [editingTime, setEditingTime] = useState(null); // the time slot being edited
+  const [editingTime, setEditingTime] = useState(null);
   const [editTimeValue, setEditTimeValue] = useState('');
 
   // Touch drag state
   const touchDragMed = useRef(null);
   const ghostRef = useRef(null);
+  const editInputRef = useRef(null);
+  const addInputRef = useRef(null);
 
   useEffect(() => {
     loadData();
@@ -38,15 +51,16 @@ export default function Schedule({ profile }) {
 
     setMedications(medsData || []);
     setSchedules(schedData || []);
-    const existingTimes = [...new Set((schedData || []).map(s => s.scheduled_time.substring(0, 5)))];
-    setTimeSlots([...new Set([...DEFAULT_TIME_SLOTS, ...existingTimes])].sort());
+
+    const dbTimes = [...new Set((schedData || []).map(s => s.scheduled_time.substring(0, 5)))];
+    const stored = getStoredSlots(profile.id);
+    setTimeSlots([...new Set([...DEFAULT_TIME_SLOTS, ...stored, ...dbTimes])].sort());
     setLoading(false);
   };
 
   // ── Desktop drag ──
   const handleDragStart = (e, med) => {
     e.dataTransfer.setData('medicationId', med.id);
-    e.dataTransfer.setData('medicationName', med.name);
     e.dataTransfer.effectAllowed = 'copy';
   };
   const handleDragOver = (e, time) => { e.preventDefault(); setDragOverSlot(time); };
@@ -78,8 +92,6 @@ export default function Schedule({ profile }) {
     const touch = e.touches[0];
     ghostRef.current.style.left = touch.clientX + 'px';
     ghostRef.current.style.top = touch.clientY + 'px';
-
-    // Highlight drop zone under finger
     ghostRef.current.style.display = 'none';
     const el = document.elementFromPoint(touch.clientX, touch.clientY);
     ghostRef.current.style.display = '';
@@ -128,13 +140,24 @@ export default function Schedule({ profile }) {
     if (!newTime) return;
     const norm = newTime.substring(0, 5);
     if (timeSlots.includes(norm)) { setError('שעה זו כבר קיימת'); setTimeout(() => setError(''), 3000); return; }
-    setTimeSlots(prev => [...prev, norm].sort());
+    const newSlots = [...timeSlots, norm].sort();
+    setTimeSlots(newSlots);
+    // persist custom slots (exclude defaults and db-derived; save all for simplicity)
+    saveStoredSlots(profile.id, newSlots.filter(t => !DEFAULT_TIME_SLOTS.includes(t)));
     setNewTime(''); setAddingTime(false);
+    setSuccess('שעה נוספה'); setTimeout(() => setSuccess(''), 2000);
   };
 
   const handleEditTimeStart = (time) => {
     setEditingTime(time);
     setEditTimeValue(time);
+    // open native picker after render
+    setTimeout(() => {
+      if (editInputRef.current) {
+        editInputRef.current.focus();
+        if (editInputRef.current.showPicker) editInputRef.current.showPicker();
+      }
+    }, 50);
   };
 
   const handleEditTimeSubmit = (e) => {
@@ -146,7 +169,9 @@ export default function Schedule({ profile }) {
       setTimeout(() => setError(''), 3000);
       return;
     }
-    setTimeSlots(prev => prev.map(t => t === editingTime ? norm : t).sort());
+    const newSlots = timeSlots.map(t => t === editingTime ? norm : t).sort();
+    setTimeSlots(newSlots);
+    saveStoredSlots(profile.id, newSlots.filter(t => !DEFAULT_TIME_SLOTS.includes(t)));
     setSchedules(prev => prev.map(s =>
       s.scheduled_time.startsWith(editingTime)
         ? { ...s, scheduled_time: norm + ':00' }
@@ -161,7 +186,9 @@ export default function Schedule({ profile }) {
       setTimeout(() => setError(''), 4000);
       return;
     }
-    setTimeSlots(prev => prev.filter(t => t !== time));
+    const newSlots = timeSlots.filter(t => t !== time);
+    setTimeSlots(newSlots);
+    saveStoredSlots(profile.id, newSlots.filter(t => !DEFAULT_TIME_SLOTS.includes(t)));
   };
 
   if (loading) return (
@@ -218,10 +245,11 @@ export default function Schedule({ profile }) {
                   {editingTime === time ? (
                     <form onSubmit={handleEditTimeSubmit} style={{ display: 'flex', gap: 6 }}>
                       <input
+                        ref={editInputRef}
                         type="time"
                         value={editTimeValue}
                         onChange={e => setEditTimeValue(e.target.value)}
-                        autoFocus
+                        onClick={() => { if (editInputRef.current?.showPicker) editInputRef.current.showPicker(); }}
                         style={{ ...base.input, padding: '3px 8px', fontSize: 15, width: 110 }}
                       />
                       <button type="submit" style={{ ...base.btn, ...base.btnPrimary, padding: '3px 10px', fontSize: 13 }}>✓</button>
@@ -273,7 +301,15 @@ export default function Schedule({ profile }) {
 
           {addingTime ? (
             <form onSubmit={handleAddTimeSlot} style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <input type="time" value={newTime} onChange={e => setNewTime(e.target.value)} required style={{ ...base.input, flex: 1 }} autoFocus />
+              <input
+                ref={addInputRef}
+                type="time"
+                value={newTime}
+                onChange={e => setNewTime(e.target.value)}
+                onClick={() => { if (addInputRef.current?.showPicker) addInputRef.current.showPicker(); }}
+                required
+                style={{ ...base.input, flex: 1 }}
+              />
               <button type="submit" style={{ ...base.btn, ...base.btnPrimary, padding: '10px 14px' }}>הוסף</button>
               <button type="button" onClick={() => setAddingTime(false)} style={{ ...base.btn, ...base.btnGhost, padding: '10px 14px' }}>ביטול</button>
             </form>

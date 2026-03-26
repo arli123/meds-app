@@ -12,6 +12,7 @@ import Admin from './pages/Admin';
 import Caregiver from './pages/Caregiver';
 import ChangePassword from './pages/ChangePassword';
 import Layout from './components/Layout';
+import { registerPushSubscription } from './utils/pushSubscription';
 
 function AppRoutes() {
   const [session, setSession] = useState(undefined); // undefined = loading
@@ -68,6 +69,7 @@ function AppRoutes() {
 
     if (!error && data) {
       setProfile(data);
+      registerPushSubscription(supabase, userId);
     }
     setLoading(false);
   };

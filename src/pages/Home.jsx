@@ -114,20 +114,52 @@ export default function Home({ profile }) {
 
     const nowTime = new Date();
     const [nowH, nowM] = [nowTime.getHours(), nowTime.getMinutes()];
+    const today = nowTime.toISOString().split('T')[0];
 
     scheduleData.forEach((s) => {
       const log = logsMap[s.id];
       if (log?.is_taken) return;
 
       const [h, m] = s.scheduled_time.split(':').map(Number);
-      const isPast = h < nowH || (h === nowH && m <= nowM);
+      const minutesPast = (nowH - h) * 60 + (nowM - m);
+      const isPast = minutesPast >= 0;
 
       if (isPast) {
         const medName = s.medications?.name || 'תרופה';
         const timeStr = s.scheduled_time.substring(0, 5);
         scheduleHourlyReminder(timeStr, medName, s.id);
+
+        // Alert caregiver if medication is 60+ minutes overdue
+        if (minutesPast >= 60) {
+          const alertKey = `caregiver_alert_${s.id}_${today}`;
+          if (!localStorage.getItem(alertKey)) {
+            localStorage.setItem(alertKey, '1');
+            notifyCaregiver(s.id, medName, timeStr);
+          }
+        }
       }
     });
+  };
+
+  const notifyCaregiver = async (scheduleId, medicationName, scheduledTime) => {
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      await fetch(`${supabaseUrl}/functions/v1/send-caregiver-alert`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseKey}`,
+        },
+        body: JSON.stringify({
+          patient_id: profile.id,
+          medication_name: medicationName,
+          scheduled_time: scheduledTime,
+        }),
+      });
+    } catch (err) {
+      console.warn('Could not notify caregiver:', err);
+    }
   };
 
   const scheduleHourlyReminder = (scheduledTime, medicationName, scheduleId) => {
