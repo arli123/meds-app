@@ -17,6 +17,7 @@ export default function Layout({ children, profile, onProfileUpdate }) {
     { path: '/medications', icon: '💊', label: 'תרופות' },
     { path: '/schedule', icon: '🕐', label: 'לוח זמנים' },
     { path: '/history', icon: '📅', label: 'היסטוריה' },
+    { path: '/help', icon: '❓', label: 'עזרה' },
     ...(profile?.is_admin ? [{ path: '/admin', icon: '⚙️', label: 'ניהול' }] : []),
   ];
 

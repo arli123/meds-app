@@ -11,6 +11,7 @@ import History from './pages/History';
 import Admin from './pages/Admin';
 import Caregiver from './pages/Caregiver';
 import ChangePassword from './pages/ChangePassword';
+import Help from './pages/Help';
 import Layout from './components/Layout';
 import { registerPushSubscription } from './utils/pushSubscription';
 
@@ -142,6 +143,7 @@ function AppRoutes() {
       {profile.is_admin && (
         <Route path="/admin" element={<Layout profile={profile} onProfileUpdate={setProfile}><Admin profile={profile} /></Layout>} />
       )}
+      <Route path="/help" element={<Layout profile={profile} onProfileUpdate={setProfile}><Help /></Layout>} />
       <Route path="/change-password" element={<Layout profile={profile} onProfileUpdate={setProfile}><ChangePassword /></Layout>} />
       <Route path="/login" element={<Navigate to="/" replace />} />
       <Route path="*" element={<Navigate to="/" replace />} />
