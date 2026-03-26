@@ -23,7 +23,8 @@ export default function Schedule({ profile }) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [dragOverSlot, setDragOverSlot] = useState(null);
-  const [newTime, setNewTime] = useState('');
+  const [newHour, setNewHour] = useState('08');
+  const [newMinute, setNewMinute] = useState('00');
   const [addingTime, setAddingTime] = useState(false);
   const [editingTime, setEditingTime] = useState(null);
   const [editTimeValue, setEditTimeValue] = useState('');
@@ -32,7 +33,7 @@ export default function Schedule({ profile }) {
   const touchDragMed = useRef(null);
   const ghostRef = useRef(null);
   const editInputRef = useRef(null);
-  const addInputRef = useRef(null);
+
 
   useEffect(() => {
     loadData();
@@ -135,16 +136,13 @@ export default function Schedule({ profile }) {
     if (!error) setSchedules(prev => prev.filter(s => s.id !== id));
   };
 
-  const handleAddTimeSlot = (e) => {
-    e.preventDefault();
-    if (!newTime) return;
-    const norm = newTime.substring(0, 5);
+  const handleAddTimeSlot = () => {
+    const norm = `${newHour}:${newMinute}`;
     if (timeSlots.includes(norm)) { setError('שעה זו כבר קיימת'); setTimeout(() => setError(''), 3000); return; }
     const newSlots = [...timeSlots, norm].sort();
     setTimeSlots(newSlots);
-    // persist custom slots (exclude defaults and db-derived; save all for simplicity)
     saveStoredSlots(profile.id, newSlots.filter(t => !DEFAULT_TIME_SLOTS.includes(t)));
-    setNewTime(''); setAddingTime(false);
+    setAddingTime(false);
     setSuccess('שעה נוספה'); setTimeout(() => setSuccess(''), 2000);
   };
 
@@ -299,25 +297,71 @@ export default function Schedule({ profile }) {
             );
           })}
 
-          {addingTime ? (
-            <form onSubmit={handleAddTimeSlot} style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <input
-                ref={addInputRef}
-                type="time"
-                value={newTime}
-                onChange={e => setNewTime(e.target.value)}
-                onClick={() => { if (addInputRef.current?.showPicker) addInputRef.current.showPicker(); }}
-                required
-                style={{ ...base.input, flex: 1 }}
-              />
-              <button type="submit" style={{ ...base.btn, ...base.btnPrimary, padding: '10px 14px' }}>הוסף</button>
-              <button type="button" onClick={() => setAddingTime(false)} style={{ ...base.btn, ...base.btnGhost, padding: '10px 14px' }}>ביטול</button>
-            </form>
-          ) : (
-            <button onClick={() => setAddingTime(true)} style={{ ...base.btn, ...base.btnGhost, width: '100%', marginTop: 8, fontSize: 14 }}>+ הוסף שעה</button>
-          )}
+          <button onClick={() => setAddingTime(true)} style={{ ...base.btn, ...base.btnGhost, width: '100%', marginTop: 8, fontSize: 14 }}>+ הוסף שעה</button>
         </div>
       </div>
+
+      {/* Add time modal */}
+      {addingTime && (
+        <div
+          onClick={() => setAddingTime(false)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
+            zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: colors.white, borderRadius: '20px 20px 0 0',
+              padding: '24px 20px 36px', width: '100%', maxWidth: 480,
+              boxShadow: '0 -4px 24px rgba(0,0,0,0.15)',
+            }}
+          >
+            <div style={{ width: 40, height: 4, background: colors.border, borderRadius: 2, margin: '0 auto 20px' }} />
+            <h3 style={{ fontSize: 17, fontWeight: 700, color: colors.text, marginBottom: 20, textAlign: 'center' }}>הוסף שעה</h3>
+
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginBottom: 24 }}>
+              <select
+                value={newHour}
+                onChange={e => setNewHour(e.target.value)}
+                style={{
+                  fontSize: 32, fontWeight: 700, color: colors.text,
+                  border: `2px solid ${colors.border}`, borderRadius: 12,
+                  padding: '10px 8px', background: colors.bg,
+                  textAlign: 'center', width: 90, appearance: 'none', direction: 'ltr',
+                }}
+              >
+                {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0')).map(h => (
+                  <option key={h} value={h}>{h}</option>
+                ))}
+              </select>
+              <span style={{ fontSize: 32, fontWeight: 700, color: colors.textLight }}>:</span>
+              <select
+                value={newMinute}
+                onChange={e => setNewMinute(e.target.value)}
+                style={{
+                  fontSize: 32, fontWeight: 700, color: colors.text,
+                  border: `2px solid ${colors.border}`, borderRadius: 12,
+                  padding: '10px 8px', background: colors.bg,
+                  textAlign: 'center', width: 90, appearance: 'none', direction: 'ltr',
+                }}
+              >
+                {['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'].map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              onClick={handleAddTimeSlot}
+              style={{ ...base.btn, ...base.btnPrimary, width: '100%', fontSize: 16, padding: '14px' }}
+            >
+              הוסף שעה {newHour}:{newMinute}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
