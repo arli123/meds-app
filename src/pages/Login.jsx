@@ -24,7 +24,7 @@ export default function Login() {
     });
     setResetLoading(false);
     if (error) {
-      setError('שגיאה בשליחת המייל. נסה שוב.');
+      setError('שגיאה: ' + error.message);
     } else {
       setResetSent(true);
       setError('');
