@@ -13,28 +13,22 @@ export default function MedicationCard({ medication, schedule, log, onTake, disa
 
   return (
     <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: '12px 14px',
       background: isTaken ? colors.successLight : colors.white,
-      borderRadius: 10,
+      borderRadius: 12,
       border: `1px solid ${isTaken ? colors.success : colors.border}`,
-      marginBottom: 8,
+      marginBottom: 10,
+      overflow: 'hidden',
       transition: 'all 0.2s',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
+      {/* Medication info */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px 10px' }}>
         <div style={{
-          width: 14,
-          height: 14,
-          borderRadius: '50%',
-          background: medication?.color || colors.primary,
-          flexShrink: 0,
+          width: 16, height: 16, borderRadius: '50%',
+          background: medication?.color || colors.primary, flexShrink: 0,
         }} />
-        <div>
+        <div style={{ flex: 1 }}>
           <div style={{
-            fontWeight: 600,
-            fontSize: 15,
+            fontWeight: 700, fontSize: 16,
             color: isTaken ? colors.success : colors.text,
             fontFamily: 'system-ui, -apple-system, sans-serif',
           }}>
@@ -46,28 +40,34 @@ export default function MedicationCard({ medication, schedule, log, onTake, disa
             </div>
           )}
         </div>
+        {isTaken && (
+          <span style={{ fontSize: 22 }}>✅</span>
+        )}
       </div>
 
-      <button
-        onClick={() => !isTaken && !disabled && onTake && onTake()}
-        disabled={isTaken || disabled}
-        style={{
-          border: 'none',
-          borderRadius: 8,
-          padding: '8px 14px',
-          cursor: isTaken || disabled ? 'default' : 'pointer',
-          fontSize: 14,
-          fontWeight: 600,
-          fontFamily: 'system-ui, -apple-system, sans-serif',
-          background: isTaken ? colors.success : colors.primary,
-          color: colors.white,
-          opacity: disabled && !isTaken ? 0.5 : 1,
-          whiteSpace: 'nowrap',
-          transition: 'all 0.2s',
-        }}
-      >
-        {isTaken ? '✓ נלקח' : '✓ לקחתי'}
-      </button>
+      {/* Take button — full width */}
+      {!isTaken && (
+        <button
+          onClick={() => !disabled && onTake && onTake()}
+          disabled={disabled}
+          style={{
+            width: '100%',
+            padding: '13px',
+            border: 'none',
+            borderTop: `1px solid ${colors.border}`,
+            background: colors.primary,
+            color: colors.white,
+            fontSize: 16,
+            fontWeight: 700,
+            fontFamily: 'system-ui, -apple-system, sans-serif',
+            cursor: disabled ? 'default' : 'pointer',
+            opacity: disabled ? 0.5 : 1,
+            letterSpacing: 0.3,
+          }}
+        >
+          ✓ לקחתי
+        </button>
+      )}
     </div>
   );
 }
